@@ -22,17 +22,54 @@ export class DicksonComponent implements OnInit {
   private gapBetweenOuterRadiusAndAxisTickCircles: any = 40;
   private gapBetweenEachInnerCircle: any = (this.outerRadius - this.innerRadius - this.gapBetweenOuterRadiusAndAxisTickCircles) / 75;
   private innerCiclesLastTickRadius: any = 0;
-
+  private chartData: any;
+  private plotLineColor:any = "red";
 
   constructor() { }
 
   ngOnInit() {
-    this.drawChart([]);
+    this.fetchDataFromExternalFiles();
+  }
+
+  fetchDataFromExternalFiles() {
+    d31.csv('assets/MilkTankTemp-7days.csv')
+      .then((data) => {
+        this.chartData = this.formatData(data);
+        this.drawChart(this.chartData);
+      })
+      .catch((error) => {
+        console.log("error while formating data");
+      });
+  }
+
+  formatData(rawData: any) {
+    let newData = [];
+
+    let dicksonChartData = [];
+
+    for (let i = 0; i < rawData.length; i++) {
+      // iterate all properties of object
+      let tempDetailObj = {
+        "Timestamp": rawData[i]["Timestamp"],
+        "TimestampDate": new Date(rawData[i]["Timestamp"]),
+        "TimestampDateParsed": Date.parse(rawData[i]["Timestamp"]),
+        "subCategory": [],
+        "CircuitName": rawData[i]["Circuit Name"],
+        "MilkTank": rawData[i]["Milk Tank 1"],
+        "Temp": rawData[i]["Milk Tank 1"]
+      };
+
+      if (tempDetailObj.CircuitName == '1') {
+        dicksonChartData.push(tempDetailObj);
+      }
+    }
+    return dicksonChartData;
   }
 
   private drawChart(chartData: any) {
     if (chartData != null && chartData != undefined && chartData.length > 0) {
-      chartData = chartData[0];
+      console.log(JSON.stringify(chartData));
+      //chartData = chartData[0];
     }
 
     // size of the diagram
@@ -113,8 +150,85 @@ export class DicksonComponent implements OnInit {
     this.drawWeekDayLabels(svgGroup, cx, cy);
     this.generateTimeLabels(svgGroup, cx, cy);
     this.generateTimeHoursTicks(svgGroup, cx, cy);
-   
+
     this.generateCurvedAxis(svgGroup, cx, cy);
+
+    this.plotTemperatureLine(svgGroup, cx, cy);
+  }
+
+  private reArrangeDataToStartFromSunday(chartActualData:any){
+     var reArrangedData = [];
+     var sundayData = [];
+     var mondayData = [];
+     var tuesdayData = [];
+     var wednesdayData = [];
+     var thursdayData = [];
+     var fridayData = [];
+     var saturdayData = [];
+
+     for(var i=0;i<chartActualData.length;i++){
+       // get day from date
+       var weekDay = chartActualData[i].TimestampDate.getDay();
+       if(weekDay==0){ // sunday
+        sundayData.push(chartActualData[i]);        
+       }
+       else if(weekDay==1){ // monday
+        mondayData.push(chartActualData[i]);        
+       }
+       else if(weekDay==2){ // tuesdayData
+        tuesdayData.push(chartActualData[i]);        
+       }
+       else if(weekDay==3){ // wednesdayData
+        wednesdayData.push(chartActualData[i]);        
+       }
+       else if(weekDay==4){ // thursdayData
+        thursdayData.push(chartActualData[i]);        
+       }
+       else if(weekDay==5){ // fridayData
+        fridayData.push(chartActualData[i]);        
+       }
+       else if(weekDay==6){ // saturdayData
+        saturdayData.push(chartActualData[i]);        
+       }
+     }
+
+     var reArrangedData = sundayData.concat(mondayData,tuesdayData,wednesdayData,thursdayData,fridayData,saturdayData); 
+     return reArrangedData;
+  }
+
+  private plotTemperatureLine(svg: any, cx: any, cy: any) {
+
+    this.chartData = this.reArrangeDataToStartFromSunday(this.chartData);
+
+    //var angleSlice = Math.PI * 2 / this.chartData.length, offset = 0; // 360
+    var angleSlice = Math.PI * 2 / 10080, offset = 0; // 24(hr)*60(min)*7(days) = 10080
+
+    //Scale for the radius
+    var rScale = d31.scaleLinear()
+      .range([this.innerRadius, this.outerRadius-this.gapBetweenOuterRadiusAndAxisTickCircles-3]) // -3 slight scale reduced due to stroke width
+      .domain([180, 30]);
+
+    //The radial line function
+    var radarLine = d31.radialLine()
+      .curve(d31.curveLinearClosed)
+      .radius(function (d: any) { 
+        return rScale(+d.Temp); 
+      })
+      .angle(function (d: any, i:any) { 
+        return i * angleSlice - offset; 
+      });
+
+    svg
+      .append("path").datum(this.chartData)
+      .attr("class", "radarArea")
+      .attr("d", function (d, i) { 
+        return radarLine(d); 
+      })
+      .style("fill", function (d: any, i) {
+        return "transparent"; 
+      })
+      .style("stroke-width","1.5px").style("stroke",this.plotLineColor)
+      .style("fill-opacity", 0.8);
   }
 
   private generateCurvedAxis(svg: any, cx: any, cy: any) {
